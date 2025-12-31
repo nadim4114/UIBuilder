@@ -338,6 +338,11 @@ app.use('/_images', express.static(settings.imagesFileDir));
 app.use('/_widgets', express.static(settings.widgetsFileDir));
 app.use('/snapshots', express.static(settings.webcamSnapShotsDir))
 
+//add custom widget via i frame
+app.get('/widget1',(req,res)=>{
+    res.sendFile(__dirname+'/index.html');
+})
+
 var accessLogStream = fs.createWriteStream(settings.logDir + '/api.log', { flags: 'a' });
 app.use(morgan('combined', {
     stream: accessLogStream,

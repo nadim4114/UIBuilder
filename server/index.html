@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Profile Editor (Weintek → Web)</title>
+
+  <style>
+    body {
+      background: #111;
+      color: white;
+      font-family: Arial;
+    }
+
+    #container {
+      position: relative;
+      width: 400px;
+      height: 449px;
+      border: 1px solid #555;
+    }
+
+    canvas {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      left: 0;
+      top: 0;
+    }
+
+    .ide {
+      display: flex;
+      gap: 2rem;
+    }
+
+    #mp {
+      z-index: 4;
+    }
+
+    #cursor {
+      z-index: 4;
+    }
+
+    #profile {
+      z-index: 3;
+    }
+
+    .controls {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    button {
+      margin: 2px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h3>Profile Editor (localStorage)</h3>
+
+  <div class="ide">
+    <div id="container">
+      <canvas id="wt"></canvas>
+      <canvas id="mp"></canvas>
+      <canvas id="profile"></canvas>
+      <canvas id="cursor"></canvas>
+    </div>
+
+    <div class="controls">
+      <div>
+        <button onclick="addMaster()">Add</button>
+        <button onclick="delMaster()">Del</button>
+      </div>
+
+      <div>
+        <button onclick="MasterUp()">Master UP</button>
+        <button onclick="MasterDown()">Master Down</button>
+      </div>
+
+      <div>
+        <button onclick="decX()">dec</button>
+        <input type="number" name="" id="inputX" onchange="onInputX()">
+        <button onclick="incX()">inc</button>
+      </div>
+
+      <div>
+        <button onclick="incY()">Up</button>
+        <input type="number" name="" id="inputY" onchange="onInputY()">
+        <button onclick="decY()">Down</button>
+      </div>
+
+      <div>
+        <button onclick="saveExit()">Save Exit</button>
+        <button onclick="restoreExit()">Restore Exit</button>
+        <button onclick="resetAll()">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ================== CONFIG ================== */
+    const W = 400;
+    const H = 449;        // profile height resolution
+    const VIEW_H = 449;
+    let scal_H = 100;
+    let wtd_m_points = new Array(scal_H);
+    let current_master_point_index = -1
+    const step = 1;
+    const T_step = 1;
+    const master_points_array = []
+
+    /* ================== STORAGE ================== */
+    const Store = {
+      get(k, d) { return JSON.parse(localStorage.getItem(k)) ?? d },
+      set(k, v) { localStorage.setItem(k, JSON.stringify(v)) }
+    };
+
+    /* ================== DATA ================== */
+    let m_points = Store.get("m_points", Array(H).fill(0));
+    let gained_m = Array(H).fill(0);
+    let wtd_m = Array(H).fill(0);
+    let prof_pts = Array(H).fill(0);
+
+    let weight = Store.get("weight", 20);
+    let gain = Store.get("gain", 100);
+
+    let cursorX = 50;
+    let cursorY = 10;
+    let mp_col = 'white';
+
+    /* ================== CANVAS ================== */
+    const cvs = {
+      wt: document.getElementById("wt"),
+      mp: document.getElementById("mp"),
+      prof: document.getElementById("profile"),
+      cur: document.getElementById("cursor")
+    };
+
+    Object.values(cvs).forEach(c => {
+      c.width = W;
+      c.height = H;
+    });
+
+    const ctx = {
+      wt: cvs.wt.getContext("2d"),
+      mp: cvs.mp.getContext("2d"),
+      prof: cvs.prof.getContext("2d"),
+      cur: cvs.cur.getContext("2d")
+    };
+
+    ctx.cur.translate(0, H);
+    ctx.cur.scale(1, -1);
+
+    ctx.wt.translate(0, H);
+    ctx.wt.scale(1, -1);
+
+    ctx.prof.translate(0, H);
+    ctx.prof.scale(1, -1);
+
+
+    ctx.mp.translate(0, H);
+    ctx.mp.scale(1, -1);
+
+
+
+    /* ================== MATH ================== */
+    function gained_mp() {
+      for (let y = 0; y < H; y++) {
+        gained_m[y] = m_points[y] > 0 ? m_points[y] * (gain / 100) : 0;
+      }
+    }
+
+    function wtd_mp() {
+      for (let y = 0; y < H; y++) {
+        wtd_m[y] = gained_m[y] > 0 ? gained_m[y] + weight : 0;
+      }
+    }
+
+    function calc_profile() {
+      let f_idx = 0, f_val = 0;
+      for (let y = 0; y < H; y++) {
+        if (wtd_m[y] > 0) {
+          let l_idx = wtd_m[y];
+          let dx = y - f_val || 1;
+          let dy = l_idx - f_idx;
+
+          for (let i = f_val; i <= y; i++) {
+            let t = (i - f_val) / dx;
+            prof_pts[i] = f_idx + dy * (3 * t * t - 2 * t * t * t);
+          }
+          f_val = y;
+          f_idx = l_idx;
+        }
+      }
+    }
+
+    function draw_mp(obj, points, step) {
+      //              let step = 1;
+      //Clear and redraw canvas   
+      obj.clearRect(0, 0, obj.width, obj.height);
+      m_points[cursorY] = cursorX;
+      Store.set("m_points", m_points);
+      console.log(m_points)
+
+      obj.beginPath();
+
+      console.log(cursorX, cursorY)
+      obj.moveTo(0, cursorY);
+      obj.lineTo(cursorX, cursorY);
+
+      obj.setLineDash([1, 1]);
+      obj.strokeStyle = mp_col; // set the color of the line
+      obj.lineWidth = 3; //Line width
+      obj.stroke();
+      console.log('master points drawn'); //for testing
+    }
+
+
+    function addMp() {
+      draw_mp(ctx.wt, wtd_m_points, 1)
+    }
+
+    /* ================== DRAW ================== */
+    function drawWeight() {
+      ctx.wt.clearRect(0, 0, W, H);
+      ctx.wt.setLineDash([3, 3]);
+      ctx.wt.strokeStyle = "blue";
+      for (let y = 0; y < H; y += 2) {
+        ctx.wt.beginPath();
+        ctx.wt.moveTo(0, y);
+        ctx.wt.lineTo(weight, y);
+        ctx.wt.stroke();
+      }
+    }
+
+    function drawMP() {
+      ctx.mp.clearRect(0, 0, W, H);
+      ctx.mp.setLineDash([2, 2]);
+      ctx.mp.strokeStyle = "brown";
+      for (let y = 0; y < H; y++) {
+        ctx.mp.beginPath();
+        ctx.mp.moveTo(0, y);
+        ctx.mp.lineTo(wtd_m[y], y);
+        ctx.mp.stroke();
+      }
+    }
+
+    function drawProfile() {
+      ctx.prof.clearRect(0, 0, W, H);
+      ctx.prof.strokeStyle = "#31c8fe";
+      ctx.prof.beginPath();
+      for (let y = 0; y < H; y++) {
+        ctx.prof.moveTo(0, y);
+        ctx.prof.lineTo(prof_pts[y], y);
+      }
+      ctx.prof.stroke();
+    }
+
+    function drawCursor() {
+      ctx.cur.clearRect(0, 0, W, H);
+      ctx.cur.strokeStyle = "red";
+      ctx.cur.beginPath();
+      ctx.cur.moveTo(0, cursorY);
+      ctx.cur.lineTo(W, cursorY);
+      ctx.cur.stroke();
+
+      ctx.cur.beginPath();
+      ctx.cur.moveTo(cursorX, 0);
+      ctx.cur.lineTo(cursorX, H);
+      ctx.cur.stroke();
+    }
+
+    /* ================== REDRAW ================== */
+    function redraw() {
+      gained_mp();
+      wtd_mp();
+      calc_profile();
+      drawWeight();
+      drawMP();
+      drawProfile();
+      drawCursor();
+    }
+
+    /* ================== ACTIONS ================== */
+    function addMaster() {
+      m_points[cursorY] = cursorX;
+      master_points_array.push([cursorX, cursorY])
+      Store.set("m_points", m_points);
+      redraw();
+    }
+
+    function delMaster() {
+      m_points[cursorY] = 0;
+      Store.set("m_points", m_points);
+      redraw();
+    }
+
+    function incX() {
+      cursorX = Math.min(W, cursorX + T_step);
+      redraw();
+    }
+
+    function decX() {
+      cursorX = Math.max(0, cursorX - T_step);
+      redraw();
+    }
+
+    function incY() {
+      cursorY = Math.min(W, cursorY + T_step);
+      console.log(cursorY)
+      redraw();
+    }
+
+    function decY() {
+      cursorY = Math.max(0, cursorY - T_step);
+      console.log(cursorY)
+      redraw();
+    }
+
+    function MasterUp() {
+      if (current_master_point_index >= master_points_array.length) {
+        return
+      }
+      current_master_point_index += 1
+      cursorX = master_points_array[current_master_point_index][0]
+      cursorY = master_points_array[current_master_point_index][1]
+
+      drawCursor()
+
+    }
+
+    function MasterDown() {
+      if (current_master_point_index <= 0) {
+        return
+      }
+      current_master_point_index -= 1
+      console.log(current_master_point_index)
+      cursorX = master_points_array[current_master_point_index][0]
+      cursorY = master_points_array[current_master_point_index][1]
+      drawCursor()
+    }
+
+    function saveExit() {
+      Store.set("exit_m_points", [...m_points]);
+      Store.set("exit_weight", weight);
+      Store.set("exit_gain", gain);
+      alert("Exit profile saved");
+    }
+
+    function restoreExit() {
+      m_points = Store.get("exit_m_points", m_points);
+      weight = Store.get("exit_weight", weight);
+      gain = Store.get("exit_gain", gain);
+      redraw();
+    }
+
+
+    function transform_cordinate(inVal, par) {
+      if (par === 'x') {
+        let test = (inVal) * (scal_W / touch_W);
+        return test;
+      }
+
+      if (par === 'y') {
+        let test = ((touch_H - inVal) * (scal_H / touch_H));
+        return test;
+      }
+    }
+
+    function onInputX(){
+      const inputXvalue = document.getElementById("inputX").value;
+      cursorX = parseInt(inputXvalue)
+      drawCursor();
+
+    }
+
+    function onInputY(){
+       const inputYvalue = document.getElementById("inputY").value;
+      cursorY= parseInt(inputYvalue)
+      drawCursor();
+    }
+
+    function resetAll() {
+      localStorage.clear();
+      location.reload();
+    }
+
+    /* ================== MOUSE ================== */
+    cvs.cur.addEventListener("mousedown", e => {
+      const r = cvs.cur.getBoundingClientRect();
+      cursorX = Math.round(e.clientX - r.left);
+      cursorY = Math.abs(Math.round(e.clientY - r.top) - H);
+      console.log(cursorX, cursorY)
+      redraw();
+    });
+
+    /* ================== INIT ================== */
+    redraw();
+  </script>
+
+</body>
+
+</html>
