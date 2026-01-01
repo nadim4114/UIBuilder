@@ -340,7 +340,7 @@ app.use('/snapshots', express.static(settings.webcamSnapShotsDir))
 
 //add custom widget via i frame
 app.get('/widget1',(req,res)=>{
-    res.sendFile(__dirname+'/widget.html');
+    res.sendFile(__dirname+'/widget1.html');
 })
 
 var accessLogStream = fs.createWriteStream(settings.logDir + '/api.log', { flags: 'a' });
