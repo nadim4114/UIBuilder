@@ -1,5 +1,5 @@
 import { Component, OnInit, Inject, OnDestroy, ViewChild } from '@angular/core';
-import { MatLegacyDialogRef as MatDialogRef, MAT_LEGACY_DIALOG_DATA as MAT_DIALOG_DATA } from '@angular/material/legacy-dialog';
+import { MatDialogRef as MatDialogRef, MAT_DIALOG_DATA as MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatExpansionPanel } from '@angular/material/expansion';
 import { Subscription, delay } from 'rxjs';
 import { TranslateService } from '@ngx-translate/core';
@@ -28,7 +28,9 @@ export class DevicePropertyComponent implements OnInit, OnDestroy {
 	deviceType: any = {};
 	showPassword: boolean;
 
-	pollingPlcType = [{text: '200 ms', value: 200},
+	pollingPlcType = [{text: '50 ms', value: 50},
+		              {text: '100 ms', value: 100},
+		              {text: '200 ms', value: 200},
 					  {text: '350 ms', value: 350},
 					  {text: '500 ms', value: 500},
 					  {text: '700 ms', value: 700},
