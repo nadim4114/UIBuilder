@@ -171,6 +171,41 @@ export class HeaderComponent implements AfterViewInit, OnDestroy {
 
         }
     }
+onSyncRuntime() {
+
+    // SHOW LOADER
+    const loader = document.getElementById('global-loader');
+    if (loader) {
+        loader.style.display = 'flex';
+    }
+
+    fetch('/api/transferproject')
+        .then(res => res.json())
+        .then(resp => {
+
+            // HIDE LOADER
+            if (loader) {
+                loader.style.display = 'none';
+            }
+
+            if (resp.status) {
+                alert('Project synced successfully');
+            } else {
+                alert('Project sync failed');
+            }
+        })
+        .catch(err => {
+
+            // HIDE LOADER (ERROR CASE)
+            if (loader) {
+                loader.style.display = 'none';
+            }
+
+            console.error(err);
+            alert('Error while syncing project');
+        });
+}
+
 
     onOpenProject() {
         let ele = document.getElementById('projectFileUpload') as HTMLElement;
