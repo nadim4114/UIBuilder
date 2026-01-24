@@ -340,95 +340,94 @@ app.use('/_widgets', express.static(settings.widgetsFileDir));
 app.use('/snapshots', express.static(settings.webcamSnapShotsDir))
 
 //add custom widget via i frame
-app.get('/widget1',(req,res)=>{
-    res.sendFile(__dirname+'/widget1.html');
+app.get('/widget1', (req, res) => {
+    res.sendFile(__dirname + '/widget1.html');
 })
 
 app.get("/api/transferproject", async (req, res) => {
-  const timestamp = Date.now();
+    const timestamp = Date.now();
 
-  try {
-    // 1️⃣ CONNECT TO RASPBERRY PI
-    await ssh.connect({
-      host: "10.91.20.59",
-      username: "rasp",
-      password: "rasp",
-      port: 22,
-      readyTimeout: 30000
-    });
+    try {
+        // 1️⃣ CONNECT TO RASPBERRY PI
+        await ssh.connect({
+            host: "10.91.20.222",
+            username: "raspi",
+            password: "raspi",
+            port: 22,
+            readyTimeout: 30000
+        });
 
-    // 2️⃣ STOP RUNNING SERVER ON RASPBERRY PI
-    await ssh.execCommand(`
-      pm2 stop app-server || pkill -f index.js || true
+        // 2️⃣ STOP RUNNING SERVER ON RASPBERRY PI
+        await ssh.execCommand(`pm2 stop FUXA`);
+
+        // 3️⃣ BACKUP EXISTING FILES (KEEP ONLY ONE BACKUP)
+        await ssh.execCommand(`
+  mkdir -p ~/FUXA/backups &&
+  rm -rf ~/FUXA/backups/server_prev ~/FUXA/backups/client_prev &&
+
+  if [ -d ~/FUXA/server ]; then
+    cp -r ~/FUXA/server ~/FUXA/backups/server_prev;
+  fi &&
+
+  if [ -d ~/FUXA/client ]; then
+    cp -r ~/FUXA/client ~/FUXA/backups/client_prev;
+  fi
+`);
+
+
+        // 4️⃣ CLEAN TARGET DIRECTORIES
+        await ssh.execCommand(`
+      rm -rf ~/FUXA/server ~/FUXA/client &&
+      mkdir -p ~/FUXA/server ~/FUXA/client/dist
     `);
 
-    // 3️⃣ BACKUP EXISTING FILES
-    await ssh.execCommand(`
-      mkdir -p ~/app/backups &&
-      if [ -d ~/app/server ]; then
-        cp -r ~/app/server ~/app/backups/server_${timestamp};
-      fi &&
-      if [ -d ~/app/client ]; then
-        cp -r ~/app/client ~/app/backups/client_${timestamp};
-      fi
-    `);
+        // 5️⃣ UPLOAD SERVER FOLDER (EXCLUDE node_modules)
+        const serverOk = await ssh.putDirectory(
+            __dirname,                         // ← server folder (Windows)
+            "/home/raspi/FUXA/server",           // ← server folder (Pi)
+            {
+                recursive: true,
+                concurrency: 2,
+                validate: (itemPath) => {
+                    return !itemPath.includes("node_modules");
+                }
+            }
+        );
 
-    // 4️⃣ CLEAN TARGET DIRECTORIES
-    await ssh.execCommand(`
-      rm -rf ~/app/server ~/app/client &&
-      mkdir -p ~/app/server ~/app/client/dist
-    `);
+        if (!serverOk) throw new Error("Server upload failed");
 
-    // 5️⃣ UPLOAD SERVER FOLDER (EXCLUDE node_modules)
-    const serverOk = await ssh.putDirectory(
-      __dirname,                         // ← server folder (Windows)
-      "/home/rasp/app/server",           // ← server folder (Pi)
-      {
-        recursive: true,
-        concurrency: 2,
-        validate: (itemPath) => {
-          return !itemPath.includes("node_modules");
-        }
-      }
-    );
+        // 6️⃣ UPLOAD client/dist
+        const clientOk = await ssh.putDirectory(
+            path.resolve(__dirname, "../client/dist"), // ← Windows client/dist
+            "/home/raspi/FUXA/client/dist",               // ← Pi client/dist
+            {
+                recursive: true,
+                concurrency: 6
+            }
+        );
 
-    if (!serverOk) throw new Error("Server upload failed");
+        if (!clientOk) throw new Error("Client upload failed");
 
-    // 6️⃣ UPLOAD client/dist
-    const clientOk = await ssh.putDirectory(
-      path.resolve(__dirname, "../client/dist"), // ← Windows client/dist
-      "/home/rasp/app/client/dist",               // ← Pi client/dist
-      {
-        recursive: true,
-        concurrency: 2
-      }
-    );
+        // 7️⃣ FIX PERMISSIONS
+        await ssh.execCommand("chmod -R 755 ~/app");
 
-    if (!clientOk) throw new Error("Client upload failed");
+        // 8️⃣ RESTART SERVER
+        await ssh.execCommand(`cd ~/ && pm2 start FUXA`);
 
-    // 7️⃣ FIX PERMISSIONS
-    await ssh.execCommand("chmod -R 755 ~/app");
+        res.json({
+            status: true,
+            msg: "Transfer complete, backup created, server restarted"
+        });
 
-    // 8️⃣ RESTART SERVER
-    await ssh.execCommand(`
-      cd ~/app/server &&
-      pm2 start index.js --name app-server || node index.js &
-    `);
-
-    res.json({
-      status: true,
-      msg: "Transfer complete, backup created, server restarted"
-    });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({
-      status: false,
-      msg: err.message
-    });
-  } finally {
-    ssh.dispose();
-  }
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({
+            status: false,
+            msg: err.message
+        });
+    } finally {
+        ssh.dispose();
+    }
 });
 
 

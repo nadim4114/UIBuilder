@@ -189,9 +189,9 @@ onSyncRuntime() {
             }
 
             if (resp.status) {
-                alert('Project synced successfully');
+                alert('Runtime synced successfully');
             } else {
-                alert('Project sync failed');
+                alert('Runtime sync failed');
             }
         })
         .catch(err => {
@@ -202,7 +202,7 @@ onSyncRuntime() {
             }
 
             console.error(err);
-            alert('Error while syncing project');
+            alert('Error while syncing Runtime');
         });
 }
 
